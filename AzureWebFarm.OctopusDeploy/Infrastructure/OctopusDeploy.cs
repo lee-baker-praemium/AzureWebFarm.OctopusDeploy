@@ -60,6 +60,7 @@ namespace AzureWebFarm.OctopusDeploy.Infrastructure
                 var machineId = _repository.Machines.FindByName(_machineName).Id;
                 var environment = _repository.Environments.FindByName(_config.TentacleEnvironment).Id;
                 var projects = _repository.Projects.FindAll()
+                    .Where(p=> !p.IsDisabled)
                     .Where(p =>
                     {
                         var process = _repository.DeploymentProcesses.Get(p.DeploymentProcessId);
