@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
-using Microsoft.Win32;
-using Microsoft.WindowsAzure.ServiceRuntime;
 using Octopus.Client;
+using Octopus.Client.Exceptions;
 using Octopus.Client.Model;
 using Octopus.Platform.Model;
 using Serilog;
@@ -54,27 +53,59 @@ namespace AzureWebFarm.OctopusDeploy.Infrastructure
 
         public void DeployAllCurrentReleasesToThisMachine()
         {
+            const string targetRolePropertyName = "Octopus.Action.TargetRoles";
             List<TaskState> currentStatuses;
             try
             {
                 var machineId = _repository.Machines.FindByName(_machineName).Id;
                 var environment = _repository.Environments.FindByName(_config.TentacleEnvironment).Id;
+                var projects = _repository.Projects.FindAll()
+                    .Where(p =>
+                    {
+                        var process = _repository.DeploymentProcesses.Get(p.DeploymentProcessId);
+                        if (process == null)
+                        {
+                            return false;
+                        }
+                        return process.Steps
+                            .Any(s =>
+                            {
+                                string value;
+                                return s.Properties.TryGetValue(targetRolePropertyName, out value)
+                                       && value == _config.TentacleRole;
+                            });
+                    })
+                    .ToDictionary(p => p.Id);
+                    
 
                 var dashboard = _repository.Dashboards.GetDashboard();
-                var releaseTasks = dashboard.Items
+                var dashboardItems = dashboard.Items
                     .Where(i => i.EnvironmentId == environment)
-                    .ToList()
-                    .Select(currentRelease => _repository.Deployments.Create(
-                        new DeploymentResource
+                    .Where(i => i.ProjectId != null && projects.ContainsKey(i.ProjectId))
+                    .ToList();
+
+                var releaseTasks = new List<string>();
+                foreach (var currentRelease in dashboardItems)
+                {
+                    try
+                    {
+                        var deployment = _repository.Deployments.Create(new DeploymentResource
                         {
                             Comments = "Automated startup deployment by " + _machineName,
                             EnvironmentId = currentRelease.EnvironmentId,
                             ReleaseId = currentRelease.ReleaseId,
-                            SpecificMachineIds = new ReferenceCollection(new[] {machineId})
-                        }
-                    ))
-                    .Select(d => d.TaskId)
-                    .ToList();
+                            SpecificMachineIds = new ReferenceCollection(new[] { machineId })
+                        });
+                        releaseTasks.Add(deployment.TaskId);
+                    }
+                    catch (OctopusValidationException ex)
+                    {
+                        Log.Error("Attempted to create a deploy that the server didn't like.", ex);
+                        // Rethowing the exception here as an exception so Azure doesn't have kittens trying to serialize it
+                        throw new Exception("Attempted to create a deploy that the server didn't like.", ex);
+                    }
+                }
+
                 Log.Information("Triggered deployments with task ids: {taskIds}", releaseTasks);
 
                 var taskStatuses = releaseTasks.Select(taskId => _repository.Tasks.Get(taskId).State);
