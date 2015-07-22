@@ -21,6 +21,7 @@ namespace AzureWebFarm.OctopusDeploy.Tests.Infrastructure
         private readonly ConfigSettings _config;
         private const string MachineName = "%machineName%";
         private const string EnvironmentId = "environment-1";
+        private const string ProjectId = "project-1";
         private const string ReleaseId = "release-1";
         private const string MachineId = "machine-1";
         private const string TaskId = "task-1";
@@ -104,12 +105,26 @@ namespace AzureWebFarm.OctopusDeploy.Tests.Infrastructure
 
         private void ArrangeDashboardData()
         {
+            const string deploymentProcessId = "testProcess";
+
             var repo = _container.Resolve<IOctopusRepository>();
             repo.Machines.FindByName(MachineName).Returns(new MachineResource {Id = MachineId});
             repo.Environments.FindByName(_config.TentacleEnvironment).Returns(new EnvironmentResource {Id = EnvironmentId});
+            var deploymentProcessResource = new DeploymentProcessResource();
+            var deploymentStepResource = new DeploymentStepResource();
+            deploymentStepResource.Properties.Add("Octopus.Action.TargetRoles", _config.TentacleRole);
+            deploymentProcessResource.Steps.Add(deploymentStepResource);
+            repo.DeploymentProcesses.Get(deploymentProcessId).Returns(a => deploymentProcessResource);
+            repo.Projects.FindAll()
+                .Returns(
+                    a =>
+                        new List<ProjectResource>
+                        {
+                            new ProjectResource(ProjectId, "test", "test") {DeploymentProcessId = deploymentProcessId}
+                        });
             var dashboard = new DashboardResource {Items = new List<DashboardItemResource>()};
             dashboard.Items.Add(new DashboardItemResource {EnvironmentId = "ignore"});
-            dashboard.Items.Add(new DashboardItemResource {EnvironmentId = EnvironmentId, ReleaseId = ReleaseId});
+            dashboard.Items.Add(new DashboardItemResource { EnvironmentId = EnvironmentId, ReleaseId = ReleaseId, ProjectId = ProjectId });
             repo.Dashboards.GetDashboard().Returns(dashboard);
             repo.Deployments.Create(null).ReturnsForAnyArgs(new DeploymentResource { TaskId = TaskId });
             repo.Tasks.Get(TaskId).Returns(new TaskResource { State = TaskState.Success });
