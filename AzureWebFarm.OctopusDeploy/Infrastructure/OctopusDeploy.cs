@@ -137,6 +137,11 @@ namespace AzureWebFarm.OctopusDeploy.Infrastructure
 
         public void UninstallTentacle()
         {
+            var machineResource = _repository.Machines.FindByName(_machineName);
+            if (machineResource != null)
+            {
+                _repository.Machines.Delete(machineResource);
+            }
             _processRunner.Run(_tentaclePath, string.Format("service {0} --stop --uninstall --console", InstanceArg));
             _processRunner.Run(_tentaclePath, string.Format("delete-instance {0} --console", InstanceArg));
             _processRunner.Run("msiexec", string.Format("/uninstall \"{0}{1}\" /quiet", _tentacleInstallPath, "Octopus.Tentacle.msi"));
