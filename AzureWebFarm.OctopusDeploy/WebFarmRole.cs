@@ -1,6 +1,4 @@
 using System;
-using System.ComponentModel.Design;
-using System.Net.Configuration;
 using System.Threading;
 using AzureWebFarm.OctopusDeploy.Infrastructure;
 using Microsoft.WindowsAzure.ServiceRuntime;
