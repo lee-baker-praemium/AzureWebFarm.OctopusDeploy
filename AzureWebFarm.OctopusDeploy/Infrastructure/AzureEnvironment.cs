@@ -32,7 +32,7 @@ namespace AzureWebFarm.OctopusDeploy.Infrastructure
             if (!string.IsNullOrEmpty(config.TentacleMachineNameSuffix))
                 name = string.Format("{0}_{1}", name, config.TentacleMachineNameSuffix);
 
-            return name;
+            return name.Replace("_", " ");
         }
 
         public static ConfigSettings GetConfigSettings()
